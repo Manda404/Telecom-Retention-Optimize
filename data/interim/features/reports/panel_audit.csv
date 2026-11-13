@@ -1,0 +1,10 @@
+Contrôle,Valeur
+Snapshots,38629.0
+Clients distincts,4000.0
+Clients répétés,3844.0
+Clés client × mois dupliquées,0.0
+Observations après churn,0.0
+Clients avec > 1 churn,0.0
+Clients avec 1 churn,1162.0
+Clients sans churn observé,2838.0
+Prévalence par snapshot,0.03008

@@ -1,0 +1,406 @@
+{
+  "preparation_schema_version": 1,
+  "seed": 42,
+  "model_features": [
+    "contract",
+    "region",
+    "dept",
+    "channel",
+    "monthly_fee",
+    "data_gb",
+    "support_calls_3m",
+    "late_payments",
+    "nps",
+    "last_invoice_amount",
+    "tenure_months",
+    "tenure_band",
+    "is_new_customer",
+    "has_support_calls",
+    "high_support_calls",
+    "has_late_payments",
+    "support_payment_interaction",
+    "high_friction",
+    "nps_segment",
+    "support_dissatisfaction",
+    "nps_missing",
+    "invoice_fee_gap",
+    "fee_per_gb",
+    "low_usage_flag",
+    "contract_tenure",
+    "contract_channel",
+    "contract_region",
+    "payment_invoice_interaction",
+    "monthly_fee_band",
+    "monthly_fee_change_pct"
+  ],
+  "original_features": [
+    "contract",
+    "region",
+    "dept",
+    "channel",
+    "monthly_fee",
+    "data_gb",
+    "support_calls_3m",
+    "late_payments",
+    "nps",
+    "last_invoice_amount"
+  ],
+  "new_features": [
+    "tenure_months",
+    "tenure_band",
+    "is_new_customer",
+    "has_support_calls",
+    "high_support_calls",
+    "has_late_payments",
+    "support_payment_interaction",
+    "high_friction",
+    "nps_segment",
+    "support_dissatisfaction",
+    "nps_missing",
+    "invoice_fee_gap",
+    "invoice_fee_ratio",
+    "fee_per_gb",
+    "low_usage_flag",
+    "contract_tenure",
+    "contract_channel",
+    "contract_region",
+    "payment_invoice_interaction",
+    "invoice_below_fee",
+    "monthly_fee_band",
+    "monthly_fee_change_pct"
+  ],
+  "categorical_features": [
+    "contract",
+    "region",
+    "dept",
+    "channel",
+    "tenure_band",
+    "nps_segment",
+    "contract_tenure",
+    "contract_channel",
+    "contract_region",
+    "monthly_fee_band"
+  ],
+  "excluded": [
+    "customer_id",
+    "snapshot_date",
+    "signup_date",
+    "age",
+    "retention_offer_declined",
+    "churn",
+    "invoice_below_fee",
+    "invoice_fee_ratio"
+  ],
+  "feature_metadata": {
+    "monthly_fee_change_pct": {
+      "formula": "100 * (monthly_fee_t - monthly_fee_t_minus_1) / monthly_fee_t_minus_1",
+      "groupby": "customer_id",
+      "previous": "consecutive_calendar_month",
+      "missing": "NaN",
+      "history": "past_covariates_only"
+    },
+    "monthly_fee_band": {
+      "edges": [
+        null,
+        52.78,
+        68.2333333333333,
+        null
+      ],
+      "labels": [
+        "Peu coûteux",
+        "Intermédiaire",
+        "Coûteux"
+      ],
+      "right_closed": true,
+      "missing_label": "Non renseigné",
+      "fit_source": "train_only"
+    }
+  },
+  "periods": {
+    "train": [
+      "2024-01",
+      "2024-07"
+    ],
+    "validation": [
+      "2024-08",
+      "2024-09"
+    ],
+    "test": [
+      "2024-10",
+      "2024-11"
+    ],
+    "walk_forward": [
+      "2024-08",
+      "2024-11"
+    ]
+  },
+  "datasets": {
+    "train": {
+      "path": "data/processed/train.csv",
+      "rows": 23322,
+      "sha256": "84e4df909e7c4a134d54dff37f18ad7e3aa77256b8960806ab5db95e9d2b1aa9"
+    },
+    "validation": {
+      "path": "data/processed/validation.csv",
+      "rows": 6309,
+      "sha256": "1112176cae2d611de482890f0db3754294f9834bfc703e7546b096085f1d4b3c"
+    },
+    "test": {
+      "path": "data/processed/test.csv",
+      "rows": 6091,
+      "sha256": "9b04c9f9c9dc5328cc5cc29ad32d31f5c4c5a99426e4b4dc9c8ef8d54e7bc71e"
+    }
+  },
+  "diagnostics": {
+    "clients": {
+      "datasets": {
+        "train": {
+          "path": "data/interim/features/diagnostics/clients/train.csv",
+          "rows": 23718,
+          "sha256": "f101ef73cd935a23fbd01ebfcd619e5c808e6f26ce1559824c0c8167b7dd82df"
+        },
+        "validation": {
+          "path": "data/interim/features/diagnostics/clients/validation.csv",
+          "rows": 5913,
+          "sha256": "2d065fab76c06e8ff72b1f5cddca97d63e012b4d4a37bea8c841a917c5873d0e"
+        }
+      },
+      "feature_metadata": {
+        "monthly_fee_change_pct": {
+          "formula": "100 * (monthly_fee_t - monthly_fee_t_minus_1) / monthly_fee_t_minus_1",
+          "groupby": "customer_id",
+          "previous": "consecutive_calendar_month",
+          "missing": "NaN",
+          "history": "past_covariates_only"
+        },
+        "monthly_fee_band": {
+          "edges": [
+            null,
+            53.56,
+            68.97,
+            null
+          ],
+          "labels": [
+            "Peu coûteux",
+            "Intermédiaire",
+            "Coûteux"
+          ],
+          "right_closed": true,
+          "missing_label": "Non renseigné",
+          "fit_source": "train_only"
+        }
+      }
+    },
+    "walk_forward": [
+      {
+        "datasets": {
+          "train": {
+            "path": "data/interim/features/diagnostics/walk_2024-08/train.csv",
+            "rows": 20103,
+            "sha256": "1407da1ddbd88ebf61c179a68c6c1c3704db22a4c79a14219e38abd1b2bc0539"
+          },
+          "validation": {
+            "path": "data/interim/features/diagnostics/walk_2024-08/validation.csv",
+            "rows": 3183,
+            "sha256": "c500f2c44147258ddbcc95201dc927e32197e23cac5c320b2e7f8b32a7481525"
+          }
+        },
+        "feature_metadata": {
+          "monthly_fee_change_pct": {
+            "formula": "100 * (monthly_fee_t - monthly_fee_t_minus_1) / monthly_fee_t_minus_1",
+            "groupby": "customer_id",
+            "previous": "consecutive_calendar_month",
+            "missing": "NaN",
+            "history": "past_covariates_only"
+          },
+          "monthly_fee_band": {
+            "edges": [
+              null,
+              52.61,
+              68.01,
+              null
+            ],
+            "labels": [
+              "Peu coûteux",
+              "Intermédiaire",
+              "Coûteux"
+            ],
+            "right_closed": true,
+            "missing_label": "Non renseigné",
+            "fit_source": "train_only"
+          }
+        },
+        "month": "2024-08",
+        "last_train_month": "2024-06"
+      },
+      {
+        "datasets": {
+          "train": {
+            "path": "data/interim/features/diagnostics/walk_2024-09/train.csv",
+            "rows": 23322,
+            "sha256": "84e4df909e7c4a134d54dff37f18ad7e3aa77256b8960806ab5db95e9d2b1aa9"
+          },
+          "validation": {
+            "path": "data/interim/features/diagnostics/walk_2024-09/validation.csv",
+            "rows": 3126,
+            "sha256": "6aff530a472ed2ac2f53cf1d3a635063b7d6b48122ae6e6161f6d3da22799426"
+          }
+        },
+        "feature_metadata": {
+          "monthly_fee_change_pct": {
+            "formula": "100 * (monthly_fee_t - monthly_fee_t_minus_1) / monthly_fee_t_minus_1",
+            "groupby": "customer_id",
+            "previous": "consecutive_calendar_month",
+            "missing": "NaN",
+            "history": "past_covariates_only"
+          },
+          "monthly_fee_band": {
+            "edges": [
+              null,
+              52.78,
+              68.2333333333333,
+              null
+            ],
+            "labels": [
+              "Peu coûteux",
+              "Intermédiaire",
+              "Coûteux"
+            ],
+            "right_closed": true,
+            "missing_label": "Non renseigné",
+            "fit_source": "train_only"
+          }
+        },
+        "month": "2024-09",
+        "last_train_month": "2024-07"
+      },
+      {
+        "datasets": {
+          "train": {
+            "path": "data/interim/features/diagnostics/walk_2024-10/train.csv",
+            "rows": 26505,
+            "sha256": "82377bb04c941d4487255ef714f264f83341c9f0e2bd259db1afe1121f9fe6e8"
+          },
+          "validation": {
+            "path": "data/interim/features/diagnostics/walk_2024-10/validation.csv",
+            "rows": 3088,
+            "sha256": "fab0cb6ce91e9f2959a9430ed8ba5b5c014af7af7b5fb428019932a64b795b7a"
+          }
+        },
+        "feature_metadata": {
+          "monthly_fee_change_pct": {
+            "formula": "100 * (monthly_fee_t - monthly_fee_t_minus_1) / monthly_fee_t_minus_1",
+            "groupby": "customer_id",
+            "previous": "consecutive_calendar_month",
+            "missing": "NaN",
+            "history": "past_covariates_only"
+          },
+          "monthly_fee_band": {
+            "edges": [
+              null,
+              52.93666666666664,
+              68.39,
+              null
+            ],
+            "labels": [
+              "Peu coûteux",
+              "Intermédiaire",
+              "Coûteux"
+            ],
+            "right_closed": true,
+            "missing_label": "Non renseigné",
+            "fit_source": "train_only"
+          }
+        },
+        "month": "2024-10",
+        "last_train_month": "2024-08"
+      },
+      {
+        "datasets": {
+          "train": {
+            "path": "data/interim/features/diagnostics/walk_2024-11/train.csv",
+            "rows": 29631,
+            "sha256": "a83238666b439eb2dcddd12520e82953edea413e9dbd49d0f2032be3efbdefb2"
+          },
+          "validation": {
+            "path": "data/interim/features/diagnostics/walk_2024-11/validation.csv",
+            "rows": 3003,
+            "sha256": "68b97468f4b3080b3c7bc17c1076f00ff87695d7042d0f4e8d08127f3945b447"
+          }
+        },
+        "feature_metadata": {
+          "monthly_fee_change_pct": {
+            "formula": "100 * (monthly_fee_t - monthly_fee_t_minus_1) / monthly_fee_t_minus_1",
+            "groupby": "customer_id",
+            "previous": "consecutive_calendar_month",
+            "missing": "NaN",
+            "history": "past_covariates_only"
+          },
+          "monthly_fee_band": {
+            "edges": [
+              null,
+              53.05,
+              68.51,
+              null
+            ],
+            "labels": [
+              "Peu coûteux",
+              "Intermédiaire",
+              "Coûteux"
+            ],
+            "right_closed": true,
+            "missing_label": "Non renseigné",
+            "fit_source": "train_only"
+          }
+        },
+        "month": "2024-11",
+        "last_train_month": "2024-09"
+      }
+    ]
+  },
+  "reports": {
+    "feature_quality": {
+      "path": "data/interim/features/reports/feature_quality.csv",
+      "rows": 30,
+      "sha256": "c8da937d3efec5a490e97c523ffc81ac0f46a0fa24dfb4c3860a08d397e76bac"
+    },
+    "split_summary": {
+      "path": "data/interim/features/reports/split_summary.csv",
+      "rows": 3,
+      "sha256": "361ceef988a2f5a7d26a0d09f8f745c0bb2b90928ccae65e9ccba9e3fe4a36ab"
+    },
+    "monthly_fee_bands": {
+      "path": "data/interim/features/reports/monthly_fee_bands.csv",
+      "rows": 8,
+      "sha256": "11e384ca05d384fa4c6ce637c8cb0f6d3f7c5b336908466e79bd1337b88d1ede"
+    },
+    "client_intersections": {
+      "path": "data/interim/features/reports/client_intersections.csv",
+      "rows": 3,
+      "sha256": "ba63d7e855be728256e24c2d635ac6a93f837b93d5e331f89ae717b42fa82063"
+    },
+    "panel_audit": {
+      "path": "data/interim/features/reports/panel_audit.csv",
+      "rows": 9,
+      "sha256": "b2f5147a21cabf40e7c89bf540a57713293bb12d839044af2262873e5f1f1125"
+    },
+    "selected_features": {
+      "path": "data/interim/features/reports/selected_features.csv",
+      "rows": 30,
+      "sha256": "d19578e06f897aa5207164deed1589e0490365141b1176dcf00ca1ce0fedbed9"
+    }
+  },
+  "quality": {
+    "raw_rows": 38689,
+    "exact_duplicates_removed": 60,
+    "ambiguous_keys_excluded": 0,
+    "retained_labeled_rows": 38629,
+    "source_csv": "/Users/surelmanda/Downloads/sujet-entretien-technique/Telecom-Retention-Optimize/data/raw/churn_clients.csv",
+    "source_sha256": "a5b5ae8f69e22aa4506df0a427fe5d3810872c3c8a6331eda6299576bceb6732"
+  },
+  "source": {
+    "path": "data/interim/features/source/notebook_01.ipynb",
+    "sha256": "91cf8db43ec19876ebee9fdf6ad385a4602f9920aa043b5013cb4a887528bdb7"
+  },
+  "preparation_id": "d20df3e04b951dabd9f2f0cba960355eb0b2e951bc0a871f49b20973a64ee40d"
+}

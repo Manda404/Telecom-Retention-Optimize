@@ -1,0 +1,6 @@
+{
+  "include": ["settings.py", "notebooks"],
+  "extraPaths": ["."],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic"
+}
