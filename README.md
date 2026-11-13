@@ -1,123 +1,129 @@
-# Telco Retention Optimize
+# Telecom Retention Optimize — refonte v2
 
-Projet exploratoire de churn télécom à 30 jours, organisé en **quatre notebooks**.
-Les fonctions restent dans les notebooks. MLflow local conserve les modèles et
-leur traçabilité ; aucune CI/CD, API ou mise en production n'est ajoutée.
+Étude locale du churn à 30 jours, organisée en quatre notebooks indépendants.
+Les calculs métier restent dans les notebooks ; `settings.py` centralise les
+chemins. Aucun service externe, CI/CD, API ou déploiement n'est nécessaire.
 
 ## Installation
 
-Python 3.12 et Poetry, depuis la racine :
+Python 3.12 et Poetry :
 
 ```bash
 poetry install --with notebook --without dev
 poetry run python -m ipykernel install --user --name telco-retention --display-name "Python 3.12 (Telco)"
 ```
 
-Choisir ce noyau dans l'éditeur. Poetry gère uniquement les dépendances avec
-`package-mode = false`. MLflow est fixé à 3.18.0. Les dépendances présentes sont
-conservées pour les analyses à venir.
+Choisir ce noyau. Poetry gère les dépendances avec `package-mode = false` ;
+MLflow reste fixé à 3.18.0. Les dépendances déjà présentes sont conservées.
 
-## Parcours : 00 → 01 → 02 → 03
+## Parcours
 
-| Notebook | Responsabilité | Sortie |
-| --- | --- | --- |
-| [00 — Exploration et profils clients](notebooks/00_churn_exploration_et_profils_clients.ipynb) | Composition, qualité, panel client × mois, relations, KPI et aperçu des tranches tarifaires | Analyses et graphiques uniquement |
-| [01 — Feature engineering](notebooks/01_churn_feature_engineering.ipynb) | Lecture normalisée, transformations, colonnes retenues, partitions et sauvegarde ; aucun modèle prédictif | CSV enrichis, contrat des features et rapports |
-| [02 — Modélisation](notebooks/02_churn_modelisation.ipynb) | Chargement des données préparées, entraînement principal, choix du seuil sur validation, diagnostics et suivi MLflow ; aucune nouvelle feature | Modèles et runs MLflow |
-| [03 — Évaluation et explicabilité](notebooks/03_churn_evaluation_et_explicabilite.ipynb) | Chargement du dernier principal MLflow, évaluation et SHAP ; aucun entraînement | Métriques, figures, bootstrap et run d'évaluation |
+| Notebook | Responsabilité |
+| --- | --- |
+| [00 — Exploration](notebooks/00_churn_exploration_et_profils_clients.ipynb) | Structure, qualité, clients et cohortes, relations, signaux suspects et dix KPI descriptifs |
+| [01 — Feature engineering](notebooks/01_churn_feature_engineering.ipynb) | Normalisation, neuf features candidates, partitions et préparation versionnée ; aucun modèle prédictif |
+| [02 — Modélisation](notebooks/02_churn_modelisation.ipynb) | Chargement des préparations, entraînement principal et diagnostics, seuil sur validation, sauvegarde MLflow ; aucune nouvelle feature |
+| [03 — Évaluation et explicabilité](notebooks/03_churn_evaluation_et_explicabilite.ipynb) | Chargement du dernier principal v2 complet, métriques, SHAP, bootstrap et figures ; aucun fit |
 
-Exécuter les cellules dans l'ordre, depuis la racine ou `notebooks/`. Chaque
-notebook fonctionne dans un noyau neuf avec les sauvegardes de l'étape précédente.
-Le 00 est descriptif et n'est pas une dépendance d'exécution du 01.
+Exécuter chaque notebook dans l'ordre de ses cellules, depuis la racine ou
+`notebooks/`. Le 02 requiert les sauvegardes du 01 ; le 03 requiert un entraînement
+principal du 02. Un noyau neuf convient à chaque étape. Le 00 reste descriptif
+et n'est pas une dépendance d'exécution.
 
-## Configuration et dossiers
+## Choix de la refonte
 
-`settings.py` expose la configuration Pydantic :
+La référence conserve les variables sources connues au snapshot : contrat,
+région, département, canal, mensualité, consommation, support, retards et NPS.
+L'âge, les identifiants, la facture et l'intervention de rétention ne sont pas
+prédicteurs. Les anciennes dérivées de facture, produits arbitraires, croisements
+systématiques et seuils non justifiés ne sont pas repris dans cette référence.
 
-```python
-from settings import settings
+Les neuf candidates sont :
 
-settings.DATA_PATH
-settings.PROCESSED_DIR
-settings.OUTPUT_DIR
-settings.MLFLOW_TRACKING_URI
-```
+- `tenure_months` : ancienneté à la date du snapshot ;
+- `usage_change_vs_recent_pct` : consommation relative à la médiane des trois
+  mois précédents, avec historique complet et référence positive ;
+- `zero_usage_streak` : mois consécutifs d'usage nul ;
+- `support_pressure_change` : variation nette du compteur glissant de support ;
+- `support_presence_3_snapshots` : persistance du support, sans sommer des
+  fenêtres de trois mois qui se chevauchent ;
+- `last_observed_nps` et `months_since_observed_nps` : dernière satisfaction
+  renseignée et fraîcheur de cette présence dans le fichier ;
+- `monthly_fee_change_pct` : variation du prix entre mois consécutifs ;
+- `monthly_fee_band` : tranches relatives au train, avec catégorie de manquants.
 
-`CHURN_DATA_PATH` peut remplacer `data/raw/churn_clients.csv` avant l'import.
-Un chemin relatif part de la racine du projet. Redémarrer le noyau après un
-changement de variable d'environnement.
+Une hypothèse métier ne démontre pas un apport prédictif. La période et les
+unités de consommation, les variations presque systématiques de tarif et la
+date réelle des notes de satisfaction restent à clarifier.
 
-- `data/raw/` : source churn et pilote 2023, inchangés.
-- `data/processed/` : uniquement `train.csv`, `validation.csv` et `test.csv`,
-  enrichis et sans index.
-- `data/interim/features/feature_contract.json` : colonnes, catégories, bornes,
-  chemins et SHA-256 des données produites par le 01.
-- `data/interim/features/reports/` : contrôles de préparation.
-- `data/interim/features/source/` : copie du code de feature engineering sans sorties.
-- `data/interim/features/diagnostics/` : entrées préparées pour les diagnostics
-  par client et les folds temporels, sans aucun modèle.
-- `data/output/` : réservé au futur fichier de prédictions final.
-- `.mlflow/` : base SQLite et artefacts locaux, ignorés par Git.
-- `note/` : énoncé et références ; `logs/` : réservé au logger à intégrer.
-
-Relancer le 01 remplace les fichiers de préparation. Le 02 vérifie les SHA-256
-avant d'entraîner. Chaque run MLflow archive ensuite ses propres copies : une
-préparation ultérieure ne change pas les données d'un ancien modèle.
-
-## Feature engineering : un point d'entrée unique
-
-Les petites classes sont internes à `ChurnFeatureEngineer`, défini dans le 01 :
+## Une seule classe pour les transformations
 
 ```python
 feature_engineer = ChurnFeatureEngineer()
-feature_engineer.fit(feature_train)
-featured = feature_engineer.transform(labeled)
+feature_engineer.fit(train_source)
+featured = feature_engineer.transform(context)
 ```
 
-`fit_transform(train_frame)` combine l'ajustement et la transformation du train.
-Les 22 nouvelles variables incluent `monthly_fee_band`, dont les tertiles sont
-ajustés sur les mensualités valides du train janvier–juillet uniquement. Les
-mêmes bornes s'appliquent ensuite à validation et test ; les montants absents ou
-invalides ont une catégorie « Non renseigné ». Le montant numérique est conservé.
-Les copies exactes sont supprimées ; les clés client × snapshot ambiguës sont
-exclues intégralement, sans arbitrage.
+La classe principale orchestre les petites classes. Seules les bornes de tarif
+sont apprises ; son historique ne mémorise pas les labels. Les calculs temporels
+sont par client, triés chronologiquement, et ne prennent aucune observation
+future. Les deltas et fenêtres exigent les mois consécutifs appropriés. Les
+premières lignes et historiques incomplets restent manquants. Le NPS peut être
+reporté depuis un snapshot antérieur avec son ancienneté, sans remplissage depuis
+le futur. Les tarifs précédents nuls ne servent pas de dénominateur.
 
-Pour les diagnostics, le 01 prépare aussi des partitions avec leur propre
-instance de la classe, ajustée seulement sur leur train. Le 02 lit ces résultats
-et les métadonnées ; il ne recopie pas les classes et ne recalcule pas les bornes.
-`make_matrix` n'y fait que des conversions techniques en chaînes/flottants.
+Le 01 ajuste les bornes sur janvier–juillet, puis transforme le contexte connu.
+Chaque diagnostic a ses propres bornes ajustées sur son train ; des covariables
+connues de mois purgés peuvent servir d'historique sans utiliser leurs labels.
+Les conversions de `make_matrix` dans le 02 sont uniquement techniques.
 
-## Entraînement et MLflow
+## Configuration et fichiers
 
-Dans le 02, les imports et paramètres sont au début, les helpers de suivi dans
-une section dédiée, puis un bloc `with mlflow.start_run(...)` encadre réellement
-`fit`, le choix du seuil et la sauvegarde. Chaque diagnostic a son propre run.
-Une erreur dans le bloc marque le run `FAILED`.
+`settings.py` expose un objet Pydantic immuable. `CHURN_DATA_PATH` peut remplacer
+le CSV par défaut ; un chemin relatif part de la racine du projet. Redémarrer
+le noyau après un changement d'environnement.
 
-MLflow conserve les paramètres, la durée de fit, les données référencées via
-`log_input`, les instantanés CSV, les SHA-256, les courbes par itération, le seuil,
-le modèle CatBoost natif avec signature et exemple, et les configurations.
-`source/notebook_02.ipynb` et `.py` contiennent le code de modélisation ;
-`source/training_cell.py` conserve la cellule exécutée dans Jupyter, ou celle du
-fichier lors d'une exécution hors Jupyter. `source/features/` conserve le code et
-le contrat du 01 associés à ces données. Sauvegarder le notebook avant l'exécution
-permet de figer toutes les définitions amont.
+- `data/raw/` : sources conservées et jamais modifiées par les notebooks ;
+- `data/processed/` : trois CSV principaux enrichis, sans index ;
+- `data/interim/features/feature_contract.json` : préparation v2, colonnes,
+  métadonnées, fichiers et SHA-256 ;
+- `data/interim/features/diagnostics/` : entrées des diagnostics par client et
+  des folds temporels ;
+- `data/interim/features/reports/` : qualité des features et résumé des partitions ;
+- `data/interim/features/source/` : copie du notebook de feature engineering ;
+- `.mlflow/` : SQLite et artefacts locaux, ignorés par Git ;
+- `data/output/` : réservé au futur fichier de scoring final ;
+- `note/` : énoncé et références.
 
-Les métriques sont publiées pendant fit puis complétées sans doublons pour toutes
-les itérations. Elles restent consultables dans `learning/history.csv`,
-`learning/history.json` et `learning/curves.html`. Le 02 conserve la baseline,
-le diagnostic clients jamais vus, le walk-forward et les ablations de facture.
+Relancer le 01 remplace les préparations. Leur contrat est la référence de lecture ;
+le 02 vérifie les empreintes avant utilisation. Les runs MLflow archivent ensuite
+leurs propres données et ne dépendent plus des CSV courants.
 
-Le 03 sélectionne le **dernier run principal terminé avec succès**, par date de
-fin, avec `stage=training`, `role=principal`, `contract_version=1`. Il ne choisit
-ni le meilleur score ni le dernier diagnostic. Le run et le seuil sont figés
-pour la session ; les CSV proviennent de ses artefacts vérifiés. Aucun fit de
-secours ni recalcul du seuil n'est effectué.
+## MLflow et traçabilité
 
-L'évaluation conserve onze figures : calibration/distribution, seuil/volumes,
-gains/lift, importance native, quatre vues SHAP, confusion/ROC, précision-rappel
-et bootstrap par client. Les tables, scores et prédictions test sont loggués dans
-un run d'évaluation lié au principal.
+Les imports, paramètres, données et helpers sont regroupés par section. Les blocs
+`with mlflow.start_run(...)` encadrent réellement `fit`, le choix du seuil et les
+sauvegardes. Un échec empêche le run d'être chargé automatiquement par le 03.
+
+Chaque modèle conserve paramètres demandés et effectifs, données référencées par
+`log_input`, instantanés CSV, code de features, code de modélisation, cellule
+exécutée, configurations, environnement, historique complet par itération et
+modèle CatBoost natif avec signature et exemple. Le principal conserve aussi son
+seuil choisi sur validation et le test en simple référence archivée. Le notebook
+sur disque est copié sans ses sorties ; le sauvegarder avant fit permet de figer
+toutes les définitions amont.
+
+Les modèles de diagnostic sont séparés du principal. Le 03 filtre les runs
+`FINISHED`, `stage=training`, `role=principal`, `contract_version=2`,
+`artifacts_complete=true`, par date de fin décroissante. Les anciens runs v1
+restent conservés mais ne sont pas sélectionnés par cette refonte. Le run chargé
+et son seuil sont figés pour toute la session d'évaluation.
+
+Le 03 loggue ses scores, tables, prédictions test, code et onze figures dans un
+run d'évaluation lié à l'entraînement. Les tracés couvrent calibration et
+probabilités, compromis de seuil, gains/lift, importance native, quatre vues SHAP,
+confusion/ROC, précision-rappel et bootstrap par client. L'additivité SHAP est
+vérifiée contre le score brut ; les contributions s'expriment en log-odds.
 
 Interface locale facultative, depuis la racine :
 
@@ -125,38 +131,42 @@ Interface locale facultative, depuis la racine :
 poetry run mlflow ui --backend-store-uri "sqlite:///$PWD/.mlflow/mlflow.db" --host 127.0.0.1 --port 5000
 ```
 
-Ouvrir http://127.0.0.1:5000. Aucun serveur permanent n'est requis par les
-notebooks. La télémétrie MLflow est désactivée.
+Ouvrir http://127.0.0.1:5000. Les notebooks utilisent directement les fichiers
+locaux ; l'interface n'est pas nécessaire à leur exécution. La télémétrie MLflow
+est désactivée.
 
-## Limites d'interprétation
+## Validation et limites
 
-Le split principal est rétrospectif : janvier–juillet 2024 pour train,
-août–septembre pour validation, octobre–novembre pour test. Toute l'année est
-explorée dans le 00 ; ce test n'est pas aveugle. La validation sert à l'early
-stopping et au seuil ; le test est uniquement archivé dans le 02, puis évalué
-dans le 03 sans ajustement. Les diagnostics utilisent une validation temporelle,
-pas des prédictions OOF.
+Train : janvier–juillet 2024 ; validation : août–septembre ; test : octobre–novembre.
+Toute l'année est explorée dans le 00 : le test reste rétrospectif. La validation
+sert au seuil et à l'early stopping ; ses scores de sélection sont optimistes.
+Les diagnostics temporels conservateurs entraînent jusqu'à M−2 pour le mois M.
+Les répétitions d'un client sont dépendantes ; le bootstrap rééchantillonne les
+clients, sans réentraînement.
 
-Un client peut contribuer plusieurs snapshots, qui ne sont pas indépendants.
-L'âge et les identifiants sont exclus des prédicteurs. La facture et ses dérivées
-peuvent révéler la cible ; leur temporalité doit être confirmée. L'ablation sans
-facture reste disponible. SHAP décrit les contributions au score en log-odds,
-sans établir de causalité ; son additivité est vérifiée.
+Les copies normalisées sont dédupliquées ; toutes les lignes des clés ambiguës
+sont exclues. Les montants et compteurs invalides sont neutralisés dans la copie
+de travail. Les exclusions et domaines sont visibles, sans modification des sources.
 
-Les figures Matplotlib des 00 et 03 utilisent un affichage SVG à largeur
-adaptable ; les tailles restent ajustables. Le ciblage à 300 contacts, le gain
-économique, le pilote et le scoring final restent à réaliser. Les données et
-travaux restent locaux. Les diagnostics de types des bibliothèques ne sont pas
-encore tous résolus ; Pyright CLI nécessite l'extraction des cellules en Python.
+Le ciblage mensuel à 300 contacts, la rentabilité, le pilote et le scoring final
+restent des étapes distinctes à réaliser. Ni l'importance native ni SHAP ne
+prouvent un effet causal.
 
-## Variation mensuelle du tarif
+## Vérifications locales
 
-Le 01 crée `monthly_fee_change_pct = 100 × (tarif courant − tarif précédent) /
-tarif précédent` via une sous-transformation interne à `ChurnFeatureEngineer`.
-Le calcul compare le même client sur deux mois consécutifs. Sans historique,
-avec un mois absent, un montant invalide ou un tarif précédent nul, la valeur
-reste manquante. Un prix futur ne modifie jamais une observation antérieure.
-Les prix historiques de mois exclus du train pour purge des labels peuvent
-servir de contexte, sans utiliser leurs labels. Le 02 lit la colonne déjà créée.
-`invoice_fee_ratio` reste dans les CSV pour audit mais est exclue des prédicteurs ;
-`invoice_fee_gap` est conservée.
+Les outils de vérification sont dans le groupe Poetry `dev` ; aucune CI n'est
+ajoutée. Les annotations pandas permettent à Pyright d'analyser son API publique.
+Le script extrait les cellules dans leur ordre et vérifie leur syntaxe et leurs
+types sans exécuter les notebooks :
+
+```bash
+poetry install --with notebook,dev
+poetry run pytest -q
+poetry run python scripts/check_notebooks.py
+```
+
+Les tests de régression couvrent les fenêtres métier, les mois absents, les
+zéros, la fraîcheur du NPS, l'absence d'information future, l'isolation des
+clients, la préservation des données et la gestion des clés ambiguës.
+Les compatibilités d'annotations spécifiques à MLflow et scikit-learn sont
+signalées ponctuellement dans le code, sans désactiver les contrôles globaux.
