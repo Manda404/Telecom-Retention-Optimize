@@ -1,0 +1,201 @@
+"""Variables métier et garanties d'historique de la partie 2."""
+
+import ast
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+FEATURES = ["tenure_days", "monthly_fee_change_pct", "usage_drop_pct", "billing_deviation_pct"]
+ALL_CREATED = [
+    "tenure_days", "tenure_months", "tenure_band", "monthly_fee_change_pct",
+    "usage_drop_pct", "billing_deviation_pct", "monthly_fee_band",
+    "late_payment_alert", "support_payment_alert", "fee_band_support",
+    "regular_usage_gb", "satisfaction_segment",
+]
+
+
+@pytest.fixture
+def engineer():
+    path = Path(__file__).resolve().parents[2] / "notebooks/old/telco_churn_modeling_with_feature_engineering.ipynb"
+    cells = json.loads(path.read_text())["cells"]
+    source = next(
+        "".join(c["source"]) for c in cells if "class ChurnFeatureEngineer:" in "".join(c["source"])
+    )
+    node = next(node for node in ast.parse(source).body if isinstance(node, ast.ClassDef))
+    catalog = None
+    for cell in cells:
+        if cell["cell_type"] != "code":
+            continue
+        for assignment in ast.parse("".join(cell["source"])).body:
+            if isinstance(assignment, ast.Assign):
+                for target in assignment.targets:
+                    if isinstance(target, ast.Name) and target.id == "FEATURE_CATALOG":
+                        catalog = ast.literal_eval(assignment.value)
+    assert catalog is not None
+    namespace = {"pd": pd, "np": np, "FEATURE_CATALOG": catalog}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "feature_class", "exec"), namespace)
+    return namespace["ChurnFeatureEngineer"]()
+
+
+@pytest.fixture
+def panel():
+    return pd.DataFrame(
+        {
+            "customer_id": "a",
+            "snapshot_date": pd.to_datetime(
+                ["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30", "2024-05-31", "2024-07-31"]
+            ),
+            "signup_date": pd.Timestamp("2024-01-01"),
+            "monthly_fee": [50.0, 60.0, 60.0, 0.0, 50.0, 50.0],
+            "last_invoice_amount": [55.0, 66.0, 60.0, 5.0, 75.0, 50.0],
+            "data_gb": [10.0, 20.0, 30.0, 10.0, 0.0, 5.0],
+            "support_calls_3m": [0., 1., 2., 0., np.nan, 3.],
+            "late_payments": [0., 1., np.nan, 2., 0., 1.],
+            "nps": [0., 6., 7., 8., 10., np.nan],
+            "churn": [0, 0, 0, 0, 0, 1],
+        }
+    )
+
+
+def test_business_formulas_and_missing_month(engineer, panel):
+    result = engineer.transform(panel)
+    expected = {
+        "tenure_days": [30, 59, 90, 120, 151, 212],
+        "monthly_fee_change_pct": [np.nan, 20, 0, -100, np.nan, np.nan],
+        "usage_drop_pct": [np.nan, np.nan, np.nan, 50, 100, np.nan],
+        "billing_deviation_pct": [10, 10, 0, np.nan, 50, 0],
+    }
+    for feature, values in expected.items():
+        np.testing.assert_allclose(result[feature], values, equal_nan=True)
+    assert set(result.columns) - set(panel.columns) == set(ALL_CREATED)
+
+
+def test_no_future_or_target_information(engineer, panel):
+    result = engineer.transform(panel)
+    for end in [1, 3, 5]:
+        past = engineer.transform(panel.iloc[:end])
+        pd.testing.assert_frame_equal(result.iloc[:end][ALL_CREATED], past[ALL_CREATED])
+    without_target = engineer.transform(panel.drop(columns="churn"))
+    pd.testing.assert_frame_equal(result[ALL_CREATED], without_target[ALL_CREATED])
+    changed = panel.copy()
+    changed["churn"] = 1 - changed["churn"]
+    pd.testing.assert_frame_equal(result[ALL_CREATED], engineer.transform(changed)[ALL_CREATED])
+
+
+def test_clients_order_and_immutability(engineer, panel):
+    other = panel.copy()
+    other["customer_id"] = "b"
+    other["monthly_fee"] = 1000.0
+    combined = pd.concat([panel, other], ignore_index=True).sample(frac=1, random_state=5)
+    combined.index = [42] * len(combined)
+    original = combined.copy(deep=True)
+    result = engineer.transform(combined)
+    pd.testing.assert_frame_equal(combined, original)
+    assert result.index.equals(combined.index)
+    actual = result.loc[result.customer_id == "a"].sort_values("snapshot_date")
+    expected = engineer.transform(panel)
+    pd.testing.assert_frame_equal(actual[ALL_CREATED].reset_index(drop=True), expected[ALL_CREATED])
+
+
+def test_invalid_values_zero_references_and_dates(engineer, panel):
+    data = panel.copy()
+    data["data_gb"] = 0.0
+    data.loc[0, "monthly_fee"] = -1.0
+    data.loc[1, "last_invoice_amount"] = np.inf
+    data.loc[2, "signup_date"] = pd.NaT
+    data.loc[3, "signup_date"] = pd.Timestamp("2025-01-01")
+    result = engineer.transform(data)
+    assert result.usage_drop_pct.isna().all()
+    assert pd.isna(result.loc[0, "billing_deviation_pct"])
+    assert pd.isna(result.loc[1, "billing_deviation_pct"])
+    assert pd.isna(result.loc[1, "monthly_fee_change_pct"])
+    assert pd.isna(result.loc[2, "tenure_days"])
+    assert pd.isna(result.loc[3, "tenure_days"])
+    assert not np.isinf(result[FEATURES].to_numpy()).any()
+
+
+def test_incomplete_usage_history_stays_missing(engineer, panel):
+    data = panel.copy()
+    data.loc[1, "data_gb"] = np.nan
+    result = engineer.transform(data)
+    assert pd.isna(result.loc[3, "usage_drop_pct"])
+    assert pd.isna(result.loc[4, "usage_drop_pct"])
+
+
+def test_ambiguous_or_missing_keys_rejected(engineer, panel):
+    with pytest.raises(ValueError):
+        engineer.transform(pd.concat([panel, panel.iloc[:1]]))
+    with pytest.raises(ValueError):
+        engineer.transform(panel.assign(snapshot_date=pd.NaT))
+    with pytest.raises(ValueError):
+        engineer.transform(panel.assign(customer_id=None))
+
+
+def test_payment_alerts_and_unknown_values(engineer, panel):
+    result = engineer.transform(panel)
+    np.testing.assert_allclose(result["late_payment_alert"], [0, 1, np.nan, 1, 0, 1], equal_nan=True)
+    np.testing.assert_allclose(result["support_payment_alert"], [0, 1, np.nan, 0, np.nan, 1], equal_nan=True)
+    assert result.loc[0, "fee_band_support"] == "40 à moins de 70 € | Sans appel support"
+    assert pd.isna(result.loc[4, "fee_band_support"])
+
+
+def test_price_band_boundaries_and_tenure(engineer, panel):
+    data = panel.copy()
+    data["monthly_fee"] = [0, 39.99, 40, 69.99, 70, np.nan]
+    result = engineer.transform(data)
+    assert result["monthly_fee_band"].iloc[:5].tolist() == [
+        "Moins de 40 €", "Moins de 40 €", "40 à moins de 70 €",
+        "40 à moins de 70 €", "70 € et plus",
+    ]
+    assert pd.isna(result.loc[5, "monthly_fee_band"])
+    np.testing.assert_allclose(result["tenure_months"], result["tenure_days"] / 30.4375)
+    assert result.loc[0, "tenure_band"] == "0–3 mois"
+    assert result.loc[5, "tenure_band"] == "6–12 mois"
+
+
+def test_regular_usage_is_a_three_month_median(engineer, panel):
+    result = engineer.transform(panel)
+    np.testing.assert_allclose(
+        result["regular_usage_gb"], [np.nan, np.nan, 20, 20, 10, np.nan], equal_nan=True,
+    )
+    data = panel.copy()
+    data["data_gb"] = 0.
+    zero = engineer.transform(data)
+    assert zero.loc[2, "regular_usage_gb"] == 0
+    data.loc[1, "data_gb"] = np.nan
+    missing = engineer.transform(data)
+    assert pd.isna(missing.loc[2, "regular_usage_gb"])
+    assert pd.isna(missing.loc[3, "regular_usage_gb"])
+
+
+def test_satisfaction_segments_and_missing_notes(engineer, panel):
+    result = engineer.transform(panel)
+    assert result["satisfaction_segment"].iloc[:5].tolist() == [
+        "Faible (0–6)", "Faible (0–6)", "Intermédiaire (>6–8)",
+        "Intermédiaire (>6–8)", "Élevée (>8–10)",
+    ]
+    assert pd.isna(result.loc[5, "satisfaction_segment"])
+    invalid = engineer.transform(panel.assign(nps=99))
+    assert invalid["satisfaction_segment"].isna().all()
+
+
+def test_geography_removed_and_invoice_kept_in_reference():
+    path = Path(__file__).resolve().parents[2] / "notebooks/old/telco_churn_modeling_with_feature_engineering.ipynb"
+    cells = json.loads(path.read_text())["cells"]
+    for cell in cells:
+        if cell["cell_type"] != "code":
+            continue
+        for node in ast.parse("".join(cell["source"])).body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "MODEL_FEATURES":
+                        features = ast.literal_eval(node.value)
+                        assert "region" not in features
+                        assert "dept" not in features
+                        assert "last_invoice_amount" in features
+                        assert len(features) == 8
+                        return
+    raise AssertionError("Liste MODEL_FEATURES introuvable")
